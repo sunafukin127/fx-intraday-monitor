@@ -1,0 +1,49 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <title>FX Intraday Monitor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #101827;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+    h1 { font-size: 24px; }
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      margin: 16px 0;
+      border-radius: 12px;
+    }
+    .pair { color: #94a3b8; }
+    .price { font-size: 32px; margin: 12px 0; }
+    .note { color: #94a3b8; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>FX Intraday Monitor</h1>
+  <p class="note">USD/JPY & EUR/USD</p>
+
+  <div class="card">
+    <div class="pair">USD/JPY</div>
+    <div class="price">--.---</div>
+    <div>High: -- / Low: --</div>
+  </div>
+
+  <div class="card">
+    <div class="pair">EUR/USD</div>
+    <div class="price">-.----</div>
+    <div>High: -- / Low: --</div>
+  </div>
+
+  <p class="note">
+    Price feed: Not connected
+  </p>
+</body>
+</html>
