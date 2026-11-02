@@ -2,48 +2,155 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
-  <title>FX Intraday Monitor</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #101827;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-    }
-    h1 { font-size: 24px; }
-    .card {
-      background: #1e293b;
-      padding: 20px;
-      margin: 16px 0;
-      border-radius: 12px;
-    }
-    .pair { color: #94a3b8; }
-    .price { font-size: 32px; margin: 12px 0; }
-    .note { color: #94a3b8; font-size: 13px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FX Intraday Monitor</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:18px;background:#0f172a;color:#f8fafc;font-family:Arial,sans-serif}
+header{max-width:1100px;margin:auto}
+h1{font-size:25px;margin:12px 0}
+.subtitle,.muted{color:#94a3b8;font-size:13px}
+main{max-width:1100px;margin:20px auto}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;min-width:0}
+.pair{color:#cbd5e1;font-weight:bold}
+.price{font-size:34px;font-weight:bold;margin:12px 0;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
+.stat{background:#0f172a;padding:12px;border-radius:9px}
+.label{color:#94a3b8;font-size:12px}
+.value{font-size:18px;margin-top:6px;font-variant-numeric:tabular-nums}
+.change{font-size:13px}
+svg{display:block;width:100%;height:210px;background:#111c30;border-radius:8px}
+.axis{fill:#94a3b8;font-size:11px}
+.line{fill:none;stroke:#38bdf8;stroke-width:2;stroke-linejoin:round}
+.gridline{stroke:#334155;stroke-width:1}
+footer{max-width:1100px;margin:20px auto;color:#94a3b8;font-size:12px;line-height:1.7}
+@media(max-width:700px){.grid{grid-template-columns:1fr}body{padding:12px}.price{font-size:30px}}
+</style>
 </head>
 <body>
-  <h1>FX Intraday Monitor</h1>
-  <p class="note">USD/JPY & EUR/USD</p>
+<header>
+<h1>FX Intraday Monitor</h1>
+<div class="subtitle">USD/JPY & EUR/USD | 日本時間（JST）</div>
+<p id="status" class="muted">価格データを読み込み中...</p>
+</header>
+<main class="grid" id="dashboard"></main>
+<footer>
+5分間隔を目標とする観測データ。高値・安値は日本時間0時以降の記録価格から算出し、市場全体の高値・安値ではありません。
+GitHub Actionsの遅延やAPIの制限により欠測する場合があります。
+</footer>
+<script>
+const PAIRS=[
+ {symbol:"USD/JPY",digits:3},
+ {symbol:"EUR/USD",digits:5}
+];
+const zone="Asia/Tokyo";
+const fmtTime=new Intl.DateTimeFormat("ja-JP",{
+ timeZone:zone,hour:"2-digit",minute:"2-digit",hour12:false
+});
+const fmtDay=new Intl.DateTimeFormat("en-CA",{
+ timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"
+});
+const dayKey=d=>{
+ const p=new Intl.DateTimeFormat("en-US",{
+  timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"
+ }).formatToParts(d);
+ const get=k=>p.find(x=>x.type===k).value;
+ return get("year")+"-"+get("month")+"-"+get("day");
+};
+const number=(v,n)=>Number.isFinite(v)?v.toFixed(n):"--";
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
 
-  <div class="card">
-    <div class="pair">USD/JPY</div>
-    <div class="price">--.---</div>
-    <div>High: -- / Low: --</div>
-  </div>
+function chart(points,digits){
+ const w=620,h=210,L=65,R=15,T=18,B=30;
+ if(!points.length)return '<text x="25" y="105" fill="#94a3b8">本日の記録なし</text>';
+ const vals=points.map(p=>p.value);
+ let lo=Math.min(...vals),hi=Math.max(...vals);
+ const pad=Math.max((hi-lo)*.15,Math.pow(10,-digits)*3);
+ lo-=pad;hi+=pad;
+ const times=points.map(p=>p.time.getTime());
+ const start=new Date(points[0].time);
+ start.setTime(times[0]);
+ const minT=times[0],maxT=Math.max(...times,minT+300000);
+ const x=t=>L+(t-minT)/(maxT-minT)*(w-L-R);
+ const y=v=>T+(hi-v)/(hi-lo)*(h-T-B);
+ let s="";
+ for(let i=0;i<4;i++){
+  const v=lo+(hi-lo)*i/3,yy=y(v);
+  s+=`<line class="gridline" x1="${L}" x2="${w-R}" y1="${yy}" y2="${yy}"/>`;
+  s+=`<text class="axis" x="4" y="${yy+4}">${number(v,digits)}</text>`;
+ }
+ const path=points.map((p,i)=>
+  `${i?"L":"M"}${x(p.time.getTime()).toFixed(1)},${y(p.value).toFixed(1)}`
+ ).join(" ");
+ s+=`<path class="line" d="${path}"/>`;
+ const last=points[points.length-1];
+ s+=`<circle cx="${x(last.time.getTime())}" cy="${y(last.value)}" r="4" fill="#38bdf8"/>`;
+ s+=`<text class="axis" x="${L}" y="${h-8}">${fmtTime.format(points[0].time)}</text>`;
+ s+=`<text class="axis" text-anchor="end" x="${w-R}" y="${h-8}">${fmtTime.format(last.time)}</text>`;
+ return s;
+}
 
-  <div class="card">
-    <div class="pair">EUR/USD</div>
-    <div class="price">-.----</div>
-    <div>High: -- / Low: --</div>
-  </div>
-
-  <p class="note">
-    Price feed: Not connected
-  </p>
+async function load(){
+ const status=document.getElementById("status");
+ try{
+  const res=await fetch("data/fx_prices.json?t="+Date.now(),{cache:"no-store"});
+  if(!res.ok)throw Error("HTTP "+res.status);
+  const raw=await res.json();
+  if(!Array.isArray(raw))throw Error("データ形式が不正です");
+  const rows=raw.map(r=>({
+   time:new Date(r.timestamp),
+   prices:r.prices||{}
+  })).filter(r=>Number.isFinite(r.time.getTime()))
+    .sort((a,b)=>a.time-b.time);
+  const today=dayKey(new Date());
+  const todays=rows.filter(r=>dayKey(r.time)===today);
+  const latest=rows.at(-1);
+  const stale=!latest||Date.now()-latest.time.getTime()>20*60000;
+  status.textContent=latest
+   ?`最終取得 ${fmtDay.format(latest.time)} ${fmtTime.format(latest.time)} JST / ${stale?"更新遅延・要確認":"データ取得済み"} / 本日 ${todays.length} 回記録`
+   :"データがまだありません";
+  document.getElementById("dashboard").innerHTML=PAIRS.map(pair=>{
+   const observations=todays.map(r=>({
+    time:r.time,value:Number(r.prices[pair.symbol])
+   })).filter(p=>Number.isFinite(p.value)&&p.value>0);
+   const all=rows.map(r=>({
+    time:r.time,value:Number(r.prices[pair.symbol])
+   })).filter(p=>Number.isFinite(p.value)&&p.value>0);
+   const last=all.at(-1),prev=all.at(-2);
+   const high=observations.length?Math.max(...observations.map(p=>p.value)):NaN;
+   const low=observations.length?Math.min(...observations.map(p=>p.value)):NaN;
+   const diff=last&&prev?last.value-prev.value:NaN;
+   const sign=diff>0?"+":"";
+   const color=diff>0?"#4ade80":diff<0?"#fb7185":"#94a3b8";
+   return `<section class="card">
+    <div class="pair">${esc(pair.symbol)}</div>
+    <div class="price">${last?number(last.value,pair.digits):"--"}</div>
+    <div class="change" style="color:${color}">
+     前回観測比 ${Number.isFinite(diff)?sign+number(diff,pair.digits):"--"}
+    </div>
+    <div class="stats">
+     <div class="stat"><div class="label">本日高値（観測値）</div>
+      <div class="value">${number(high,pair.digits)}</div></div>
+     <div class="stat"><div class="label">本日安値（観測値）</div>
+      <div class="value">${number(low,pair.digits)}</div></div>
+    </div>
+    <div class="label" style="margin-bottom:10px">本日の価格推移</div>
+    <svg viewBox="0 0 620 210" role="img" aria-label="${esc(pair.symbol)} intraday chart">
+     ${chart(observations,pair.digits)}
+    </svg>
+    <p class="muted">本日の観測数：${observations.length}</p>
+   </section>`;
+  }).join("");
+ }catch(e){
+  status.textContent="データ読込エラー："+e.message;
+ }
+}
+load();
+setInterval(load,60000);
+</script>
 </body>
 </html>
